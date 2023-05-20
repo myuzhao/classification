@@ -41,6 +41,8 @@ class Train():
         self.sample_rate = cfg['Dataset'].getint('sample_rate')
         self.train_path = cfg['Dataset']['train_h5py_file']
         self.test_path = cfg['Dataset']['test_h5py_file']
+        self.audio_time = cfg['Dataset'].getint('audio_time')
+
         self.log_path = cfg['Training']['log_path']
         self.model_prefix = cfg['Training']['model_prefix']
         self.resume_model_flag = cfg['Training'].getboolean('resume_model_flag')
@@ -49,7 +51,10 @@ class Train():
         self.batch_size = cfg['Training'].getint('batch_size')
         self.num_workers = cfg['Training'].getint('num_workers')
         self.n_fft = cfg['Training'].getint('n_fft')
+        self.f_min = cfg['Training'].getint('f_min')
+        self.f_max = cfg['Training'].getint('f_max')
         self.n_mels = cfg['Training'].getint('n_mels')
+        #self.spec_width = cfg['Training'].getint('spec_width')
         self.gup_idxs = cfg['Training'].getint('gup_idxs')
         self.learning_rate = cfg['Training'].getfloat('learning_rate')
         self.max_epochs = cfg['Training'].getint('max_epochs')
@@ -72,7 +77,7 @@ class Train():
 
         test_data = TDomainData(self.test_path)
         test_loader = DataLoader(test_data,batch_size=self.batch_size,shuffle=True,drop_last=True)#,num_workers=self.num_workers,pip_memory=True)
-        feature_function = AudioFeaturizer(self.sample_rate, self.n_fft, self.n_mels, feature_method='MFCC')
+        feature_function = AudioFeaturizer(self.sample_rate, self.n_fft, self.n_mels, self.audio_time, self.f_min, self.f_max)
         loss_function = torch.nn.CrossEntropyLoss()
 
         if self.resume_model_flag:
