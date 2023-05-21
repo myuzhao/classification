@@ -4,6 +4,7 @@ import numpy as np
 import soundfile as sf 
 import configparser as CP
 from datetime import datetime
+import shutil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -35,10 +36,10 @@ class TDomainData(Dataset):
 
 
 class Train():
-    def __init__(self, config_path):
+    def __init__(self, config_file):
         cfg = CP.ConfigParser()
         cfg._interpolation = CP.ExtendedInterpolation()
-        cfg.read(config_path)
+        cfg.read(config_file)
         self.cfg = cfg
 
         self.classes_list = self.strToList(cfg['Dataset']['classes_list'])
@@ -69,6 +70,8 @@ class Train():
         folder_name = now.strftime("%Y-%m-%d-%H-%M-%S")
         os.makedirs(folder_name, exist_ok=True)
         self.train_folder = folder_name
+        shutil.copy(config_file, folder_name)
+
         logging.basicConfig(level=logging.DEBUG,filename=os.path.join(folder_name, self.log_file),filemode='w+')
         self.set_seed()
 
@@ -240,14 +243,14 @@ class Infer():
 
 def global_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', default='config.cfg',type=str, help='config path')
+    parser.add_argument('--config_file', default='config.cfg',type=str, help='config file')
     
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
     args = global_parse() 
-    train = Train(args.config_path)
+    train = Train(args.config_file)
     train.run()
-    #infer = Infer(args.config_path)
+    #infer = Infer(args.config_file)
     #infer.run()
