@@ -23,7 +23,7 @@ class AudioFeaturizer(nn.Module):
                                        n_mels = n_mels)
         
 
-    def forward(self, waveforms, input_lens_ratio):
+    def forward(self, waveforms):
         feature = self.feat_fun(waveforms)
         feature = feature.transpose(2, 1)
         mean = torch.mean(feature, 1, keepdim=True)

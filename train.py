@@ -1,13 +1,15 @@
+import os
+import random
+import numpy as np
+import soundfile as sf 
+import configparser as CP
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader,Dataset
 import time,h5py,logging,glob,os,argparse
-import numpy as np
-import soundfile as sf 
 from models.model import TDNN, load_model, save_model
 from models.featurizer import AudioFeaturizer
-import configparser as CP
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -29,6 +31,7 @@ class TDomainData(Dataset):
         wav,label = self.f['wav_label'][idx,:-1], self.f['wav_label'][idx,-1]
         wav,label = wav.squeeze(),label.squeeze()
         return wav,label
+
 
 class Train():
     def __init__(self, config_path):
@@ -60,6 +63,21 @@ class Train():
         self.max_epochs = cfg['Training'].getint('max_epochs')
         self.num_class = len(self.classes_list)
         self.input_size = self.n_mels
+        self.set_seed()
+
+    def set_seed(self, seed=42):
+        '''Sets the seed of the entire notebook so results are the same every time we run.
+        This is for REPRODUCIBILITY.'''
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        # When running on the CuDNN backend, two further options must be set
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        # Set a fixed value for the hash seed
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        print('> SEEDING DONE')
 
     def strToList(self, str):
         str = str.replace("[",'')
@@ -68,6 +86,10 @@ class Train():
         str = str.replace(" ",'')
         list = str.split(',')
         return list
+
+    def early_stopping(self):
+        #TODO
+        pass
 
     def run(self):
         logging.basicConfig(level=logging.DEBUG,filename=self.log_path,filemode='w+')
@@ -79,7 +101,6 @@ class Train():
         test_loader = DataLoader(test_data,batch_size=self.batch_size,shuffle=True,drop_last=True)#,num_workers=self.num_workers,pip_memory=True)
         feature_function = AudioFeaturizer(self.sample_rate, self.n_fft, self.n_mels, self.audio_time, self.f_min, self.f_max)
         loss_function = torch.nn.CrossEntropyLoss()
-
         if self.resume_model_flag:
             model = load_model(self.resume_model_path)
         else:
@@ -88,7 +109,6 @@ class Train():
         model.to(device)
         model = torch.nn.DataParallel(model,device_ids = self.gup_idxs)
         optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate)
-        
 
         _min,_max = -1, 1
         train_loss_list = []
@@ -107,8 +127,7 @@ class Train():
                     wav = wav.float()
                     label = label.to(torch.int64).to(device)
                     one_hot_label = F.one_hot(label, num_classes=self.num_class)
-                    input_lens_ratio = np.array(0.0)
-                    feature = feature_function(wav, torch.from_numpy(input_lens_ratio))
+                    feature = feature_function(wav)
                     label_pred = model(feature.to(device).float())
 
                     _, predicted = torch.max(label_pred.data, 1)
@@ -116,8 +135,7 @@ class Train():
                     train_total_all = train_total_all + label.size(0)
                     train_correct_all = train_correct_all + correct
 
-                    train_loss = loss_function(label_pred.float(),one_hot_label.float())
-                    #loss_function(label_pred.float(),label)
+                    train_loss = loss_function(label_pred.float(),one_hot_label.float())      
                     current_train_loss = train_loss.item()
                     train_loss_all += current_train_loss
 
@@ -155,8 +173,7 @@ class Train():
                         wav = wav.to(device).float()
                         label = label.to(torch.int64).to(device)
                         one_hot_label = F.one_hot(label, num_classes=self.num_class)
-                        input_lens_ratio = np.array(0.0)
-                        feature = feature_function(wav, torch.from_numpy(input_lens_ratio))
+                        feature = feature_function(wav)
                         label_pred = model(feature.to(device).float())
 
                         _, predicted = torch.max(label_pred.data, 1)
