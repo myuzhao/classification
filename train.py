@@ -3,6 +3,7 @@ import random
 import numpy as np
 import soundfile as sf 
 import configparser as CP
+from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,7 +47,7 @@ class Train():
         self.test_path = cfg['Dataset']['test_h5py_file']
         self.audio_time = cfg['Dataset'].getint('audio_time')
 
-        self.log_path = cfg['Training']['log_path']
+        self.log_file = cfg['Training']['log_file']
         self.model_prefix = cfg['Training']['model_prefix']
         self.resume_model_flag = cfg['Training'].getboolean('resume_model_flag')
         self.resume_model_path = cfg['Training']['resume_model_path']
@@ -63,6 +64,12 @@ class Train():
         self.max_epochs = cfg['Training'].getint('max_epochs')
         self.num_class = len(self.classes_list)
         self.input_size = self.n_mels
+        now = datetime.now()
+        # 格式化时间字符串，作为文件夹名
+        folder_name = now.strftime("%Y-%m-%d-%H-%M-%S")
+        os.makedirs(folder_name, exist_ok=True)
+        self.train_folder = folder_name
+        logging.basicConfig(level=logging.DEBUG,filename=os.path.join(folder_name, self.log_file),filemode='w+')
         self.set_seed()
 
     def set_seed(self, seed=42):
@@ -77,7 +84,7 @@ class Train():
         torch.backends.cudnn.benchmark = False
         # Set a fixed value for the hash seed
         os.environ['PYTHONHASHSEED'] = str(seed)
-        print('> SEEDING DONE')
+        logging.debug("SEEDING DONE:{}".format(seed))
 
     def strToList(self, str):
         str = str.replace("[",'')
@@ -92,7 +99,6 @@ class Train():
         pass
 
     def run(self):
-        logging.basicConfig(level=logging.DEBUG,filename=self.log_path,filemode='w+')
         torch.backends.cudnn.benchmark = True
         train_data = TDomainData(self.train_path)
         train_loader = DataLoader(train_data,batch_size=self.batch_size,shuffle=True,drop_last=True)#,num_workers=self.num_workers,pip_memory=True)
@@ -148,17 +154,17 @@ class Train():
                         p.data.clamp_(_min,_max)
 
                     if counter%20 == 0:
-                        acc = train_correct_all / train_total_all
+                        train_acc = train_correct_all / train_total_all
                         avg_train_loss = train_loss_all/counter
-                        logging.debug("Epoch {}.......Step: {}/{}.......train loss for epoch: {} {}, acc:{}".format(
-                                    epoch,counter,len(train_loader), avg_train_loss, current_train_loss, acc))
+                        logging.debug("Epoch {}.......Step: {}/{}.......train loss for epoch: {} {}, train acc:{:.3f}".format(
+                                    epoch,counter,len(train_loader), avg_train_loss, current_train_loss, train_acc))
 
                 avg_train_loss = train_loss_all/counter
-                acc = train_correct_all / train_total_all
+                train_acc = train_correct_all / train_total_all
                 train_loss_list.append(avg_train_loss)
                 current_time = time.time()
                 
-                logging.debug("Epoch {}.......Average train loss for epoch: {}, acc:{}".format(epoch, avg_train_loss, acc))
+                logging.debug("Epoch {}.......Average train loss for epoch: {}, train acc:{:.3f}".format(epoch, avg_train_loss, train_acc))
                 logging.debug("Trian,Totle time elapsed: {} seconds".format(current_time - start_time))
                 
                 ##test
@@ -187,12 +193,14 @@ class Train():
                         
 
                     avg_test_loss = test_loss_all/counter
-                    acc = test_correct_all / test_total_all
-                    logging.debug("Epoch {}.......Average test loss for epoch: {}, acc:{}".format(epoch, avg_test_loss, acc))
+                    test_acc = test_correct_all / test_total_all
+                    logging.debug("Epoch {}.......Average test loss for epoch: {}, test acc:{:.3f}".format(epoch, avg_test_loss, test_acc))
                 test_loss_list.append(avg_test_loss)
   
-                outname = "{}_{}_{}_out{}.pth".format(self.model_prefix,str(train_loss.detach().cpu().numpy()), str(test_loss.detach().cpu().numpy()), str(epoch)) 
-                save_model(model,outname)
+                out_name = "{}_train_loss_{:.3f}_acc_{:.3f}_test_loss_{:.3f}_acc_{:.3f}_out{}.pth".format(self.model_prefix,train_loss.detach().cpu().numpy(), train_acc, test_loss.detach().cpu().numpy(), test_acc, str(epoch)) 
+                
+
+                save_model(model,os.path.join(self.train_folder, out_name))
 
 
 
